@@ -7,7 +7,8 @@ import torch.optim as optim
 
 import torchvision
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils, datasets
+from torchvision import utils, datasets
+from torchvision import transforms as T
 import numpy as np
 from tqdm import tqdm
 import matplotlib
@@ -34,6 +35,12 @@ def load_pickle(fdir, name):
     return pickle.load(open(fname, "rb"))
 
 
+def get_transform(train):
+    transforms = []
+    transforms.append(T.ToTensor())
+    return T.Compose(transforms)
+
+
 class BSTLDataset(Dataset):
   def __init__(
       self, root='/home/aadeshnpn/Documents/tlight/bsltd',
@@ -41,8 +48,8 @@ class BSTLDataset(Dataset):
 
     fname = 'bsltd_train.pkl' if train else 'bsltd_test.pkl'
     self.data = load_pickle(root, fname)
-    self.transform = transforms.Compose(
-         [transforms.ToTensor()])
+    self.train = train
+    self.transform = get_transform(train)
 
   def __getitem__(self, index):
     image = Image.open(self.data[index]['path']).convert('RGB')
@@ -56,14 +63,101 @@ class BSTLDataset(Dataset):
         [t['x_min'], t['y_min'], t['x_max'], t['y_max']])
       labels.append(
         [EVAL_ID_MAP[SIMPLIFIED_CLASSES[t['label']]]])
-      # target["masks"] = masks
-      # target["image_id"] = image_id
-      # target["area"] = area
-      # target["iscrowd"] = iscrowd
+    boxes = torch.as_tensor(boxes, dtype=torch.float32)
+    labels = torch.as_tensor(labels, dtype=torch.int64)
     return image, {'boxes': boxes, 'labels': labels}
 
   def __len__(self):
     return  10    # len(self.data)
+
+
+def run_one_epoch(
+    train_loader, optimizer, model, lr_scheduler, device):
+
+  model.train()
+  losslog = []
+  for images, targets in train_loader:
+    image = list(image.to(device) for image in images)
+    # print(targets[0])
+    targets = {k: v.to(device) for k, v in targets.items()}
+    print(targets)
+    loss_dict = model(image, targets)
+    losses = sum(loss for loss in loss_dict.values())
+    losslog.append(losses.item())
+
+    # Reset the grad value to zero
+    optimizer.zero_grad()
+    losses.backward()
+    optimizer.step()
+
+    if lr_scheduler is not None:
+      lr_scheduler.step()
+  return np.mean(losslog)
+
+
+@torch.no_grad()
+def evaluate(model, test_loader, device):
+  model.eval()
+  losslog = []
+  for images, targets in test_loader:
+    image = list(image.to(device) for image in images)
+    # target = [{k: v.to('cpu') for k, v in t.items()} for t in targets]
+
+    # Predicted value
+    outputs = model(image)
+    outputs = [{k: v.to('cpu') for k, v in t.items()} for t in outputs]
+    res = {target["label"].item(): output for target, output in zip(targets, outputs)}
+    losslog.append(res)
+  return res
+
+
+def train():
+  import torchvision
+  # load a model pre-trained pre-trained on COCO
+  from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+  model = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+    pretrained=True)
+  num_classes = 4  # 1 class (person) + background
+  # get number of input features for the classifier
+  in_features = model.roi_heads.box_predictor.cls_score.in_features
+  # replace the pre-trained head with a new one
+  model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+  # replace the pre-trained head with a new one
+  device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+  # use our dataset and defined transformations
+  dataset = BSTLDataset()
+  dataset_test = BSTLDataset(train=False)
+
+  # define training and validation data loaders
+  data_loader = torch.utils.data.DataLoader(
+      dataset, batch_size=2, shuffle=True, num_workers=4)
+
+  data_loader_test = torch.utils.data.DataLoader(
+      dataset_test, batch_size=1, shuffle=False, num_workers=4)
+
+  # move model to the right device
+  model.to(device)
+
+  # construct an optimizer
+  params = [p for p in model.parameters() if p.requires_grad]
+  optimizer = torch.optim.SGD(params, lr=0.005,
+                              momentum=0.9, weight_decay=0.0005)
+
+  # and a learning rate scheduler
+  lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+                                                  step_size=3,
+                                                  gamma=0.1)
+
+  # let's train it for 10 epochs
+  num_epochs = 10
+
+  for epoch in range(num_epochs):
+    # train for one epoch, printing every 10 iterations
+    run_one_epoch(data_loader, optimizer, model, lr_scheduler, device)
+    evaluate(model, data_loader_test, device=device)
+
+  print("That's it!")
 
 
 def main():
@@ -72,7 +166,8 @@ def main():
     train_dataset, batch_size=5,
     shuffle=False, num_workers=1, pin_memory=True)
   for img, box in train_loader:
-        print(img.shape, box)
+        print(img.shape)
 
 
-main()
+# main()
+train()
