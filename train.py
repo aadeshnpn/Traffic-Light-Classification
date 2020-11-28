@@ -11,7 +11,7 @@ from torchvision import transforms, utils, datasets
 import numpy as np
 from tqdm import tqdm
 import matplotlib
-
+from constants import EVAL_ID_MAP, SIMPLIFIED_CLASSES
 
 # If there is $DISPLAY, display the plot
 if os.name == 'posix' and "DISPLAY" not in os.environ:
@@ -45,11 +45,22 @@ class BSTLDataset(Dataset):
          [transforms.ToTensor()])
 
   def __getitem__(self, index):
-    image = Image.open(self.data[index]['path'])
-    boxes = self.data[index]['boxes']
+    image = Image.open(self.data[index]['path']).convert('RGB')
+    target = self.data[index]['boxes']
     image = self.transform(image)
-    print(image.shape, boxes)
-    return image, []
+    # print(image.shape, target)
+    boxes = []
+    labels = []
+    for t in target:
+      boxes.append(
+        [t['x_min'], t['y_min'], t['x_max'], t['y_max']])
+      labels.append(
+        [EVAL_ID_MAP[SIMPLIFIED_CLASSES[t['label']]]])
+      # target["masks"] = masks
+      # target["image_id"] = image_id
+      # target["area"] = area
+      # target["iscrowd"] = iscrowd
+    return image, {'boxes': boxes, 'labels': labels}
 
   def __len__(self):
     return  10    # len(self.data)

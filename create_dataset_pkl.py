@@ -70,6 +70,8 @@ def get_all_labels(input_yaml, riib=False, clip=True):
                 box['y_min'] = box['y_min'] + 8
     # return images
     fdir = os.path.abspath(os.path.dirname(input_yaml))
+    images = [(image) for image in images if len(image['boxes']) > 0]
+    print(images[0])
     save_pickle(
         images, fdir,
         'bsltd_' + os.path.basename(input_yaml).split('.')[0])
