@@ -70,7 +70,9 @@ def get_all_labels(input_yaml, riib=False, clip=True):
                 box['y_min'] = box['y_min'] + 8
     # return images
     fdir = os.path.abspath(os.path.dirname(input_yaml))
-    save_pickle(images, fdir, 'bsltd_train')
+    save_pickle(
+        images, fdir,
+        'bsltd_' + os.path.basename(input_yaml).split('.')[0])
 
 
 if __name__ == '__main__':
