@@ -9,6 +9,7 @@ import torchvision
 from torch.utils.data import Dataset, DataLoader
 from torchvision import utils, datasets
 from torchvision import transforms as T
+from torchvision.transforms import functional as F
 import numpy as np
 from tqdm import tqdm
 import matplotlib
@@ -26,6 +27,39 @@ from PIL import Image
 # assert torch.cuda.is_available(), "Change to gpu"
 # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+class Compose(object):
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, image, target):
+        for t in self.transforms:
+            image, target = t(image, target)
+        return image, target
+
+
+class RandomHorizontalFlip(object):
+    def __init__(self, prob):
+        self.prob = prob
+
+    def __call__(self, image, target):
+        if np.random.rand() < self.prob:
+            height, width = image.shape[-2:]
+            image = image.flip(-1)
+            bbox = target["boxes"]
+            bbox[:, [0, 2]] = width - bbox[:, [2, 0]]
+            target["boxes"] = bbox
+        return image, target
+
+
+class ToTensor(object):
+    def __call__(self, image, target):
+        image = F.to_tensor(image)
+        return image, target
+
+
+def collate_fn(batch):
+    return tuple(zip(*batch))
+
 
 def load_pickle(fdir, name):
     import pathlib
@@ -38,6 +72,8 @@ def load_pickle(fdir, name):
 def get_transform(train):
     transforms = []
     transforms.append(T.ToTensor())
+    if train:
+        transforms.append(T.RandomHorizontalFlip(0.5))
     return T.Compose(transforms)
 
 
@@ -68,7 +104,7 @@ class BSTLDataset(Dataset):
     return image, {'boxes': boxes, 'labels': labels}
 
   def __len__(self):
-    return  10    # len(self.data)
+    return len(self.data)
 
 
 def run_one_epoch(
@@ -79,8 +115,9 @@ def run_one_epoch(
   for images, targets in train_loader:
     image = list(image.to(device) for image in images)
     # print(targets[0])
-    targets = {k: v.to(device) for k, v in targets.items()}
-    print(targets)
+    # targets = {k: v.to(device) for k, v in targets.items()}
+    targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+    # print(targets)
     loss_dict = model(image, targets)
     losses = sum(loss for loss in loss_dict.values())
     losslog.append(losses.item())
@@ -124,17 +161,19 @@ def train():
   model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
   # replace the pre-trained head with a new one
   device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
+  # print(device)
   # use our dataset and defined transformations
   dataset = BSTLDataset()
   dataset_test = BSTLDataset(train=False)
 
   # define training and validation data loaders
   data_loader = torch.utils.data.DataLoader(
-      dataset, batch_size=2, shuffle=True, num_workers=4)
+      dataset, batch_size=2, shuffle=True, num_workers=4,
+      collate_fn=collate_fn)
 
   data_loader_test = torch.utils.data.DataLoader(
-      dataset_test, batch_size=1, shuffle=False, num_workers=4)
+      dataset_test, batch_size=1, shuffle=False, num_workers=4,
+      collate_fn=collate_fn)
 
   # move model to the right device
   model.to(device)
