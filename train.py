@@ -85,7 +85,7 @@ class BSTLDataset(Dataset):
     fname = 'bsltd_train.pkl' if train else 'bsltd_test.pkl'
     self.data = load_pickle(root, fname)
     self.train = train
-    print('datalenght', self.train, len(self.data))
+    # print('datalenght', self.train, len(self.data))
     self.transform = get_transform(train)
 
   def __getitem__(self, index):
@@ -109,7 +109,7 @@ class BSTLDataset(Dataset):
     return image, {'boxes': boxes, 'labels': labels}
 
   def __len__(self):
-    return 100 # len(self.data)
+    return len(self.data)
 
 
 def run_one_epoch(
@@ -143,13 +143,10 @@ def evaluate(model, test_loader, device):
   losslog = []
   for images, targets in test_loader:
     image = list(image.to(device) for image in images)
-    # target = [{k: v.to('cpu') for k, v in t.items()} for t in targets]
 
     # Predicted value
     outputs = model(image)
-    outputs = [{k: v.to('cpu') for k, v in t.items()} for t in outputs]
-    res = {target["labels"].item(): output for target, output in zip(targets, outputs)}
-    losslog.append(res)
+
   return res
 
 
@@ -207,11 +204,11 @@ def train():
   dataset_test = torch.utils.data.Subset(dataset_test, indices[-50:])
   # define training and validation data loaders
   data_loader = torch.utils.data.DataLoader(
-      dataset, batch_size=2, shuffle=True, num_workers=4,
+      dataset, batch_size=8, shuffle=True, num_workers=4,
       collate_fn=collate_fn)
 
   data_loader_test = torch.utils.data.DataLoader(
-      dataset_test, batch_size=1, shuffle=False, num_workers=4,
+      dataset_test, batch_size=1, shuffle=False, num_workers=1,
       collate_fn=collate_fn)
 
   # move model to the right device
@@ -228,14 +225,25 @@ def train():
                                                   gamma=0.1)
 
   # let's train it for 10 epochs
-  num_epochs = 2
+  num_epochs = 10
+  # loop = tqdm(
+  #   total=(len(data_loader)+ len(data_loader_test))*num_epochs, position=0)
+  loop = tqdm(
+    total=(len(data_loader))*num_epochs, position=0)
 
-  for epoch in tqdm(range(num_epochs)):
+  for epoch in range(num_epochs):
     # train for one epoch, printing every 10 iterations
-    run_one_epoch(data_loader, optimizer, model, lr_scheduler, device)
-    evaluate(model, data_loader_test, device=device)
+    tloss = run_one_epoch(data_loader, optimizer, model, lr_scheduler, device)
+    # eloss = evaluate(model, data_loader_test, device=device)
+    eloss = 0.0
+    loop.set_description('epoch:{}, train loss:{:.4f}, test loss:{:.4f}'.format(epoch, tloss, eloss))
+    loop.update(1)
 
   print("That's it!")
+  dummy_input = torch.randn(5, 3, 1280, 720, device='cuda')
+  # torch.onnx.export(
+  #   model, dummy_input, "tlight.onnx", verbose=True)
+  torch.save(model.state_dict(), 'tlight.pt')
 
 
 def main():
