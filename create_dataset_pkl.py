@@ -71,6 +71,7 @@ def get_all_labels(input_yaml, riib=False, clip=True):
     # return images
     fdir = os.path.abspath(os.path.dirname(input_yaml))
     images = [(image) for image in images if len(image['boxes']) > 0]
+    # images = [(image) for image in images if os.path.isfile(image['path'])]
     print(images[0])
     save_pickle(
         images, fdir,

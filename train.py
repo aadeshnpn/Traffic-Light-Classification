@@ -148,7 +148,7 @@ def evaluate(model, test_loader, device):
     # Predicted value
     outputs = model(image)
     outputs = [{k: v.to('cpu') for k, v in t.items()} for t in outputs]
-    res = {target["label"].item(): output for target, output in zip(targets, outputs)}
+    res = {target["labels"].item(): output for target, output in zip(targets, outputs)}
     losslog.append(res)
   return res
 
@@ -197,8 +197,8 @@ def train():
                     rpn_anchor_generator=anchor_generator,
                     box_roi_pool=roi_pooler)
   # replace the pre-trained head with a new one
-  # device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-  device = 'cpu'
+  device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+  # device = 'cpu'
   # use our dataset and defined transformations
   dataset = BSTLDataset()
   dataset_test = BSTLDataset(train=False)
