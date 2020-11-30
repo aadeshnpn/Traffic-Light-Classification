@@ -228,18 +228,18 @@ def train():
   # device = 'cpu'
   # use our dataset and defined transformations
   dataset = BSTLDataset()
-  dataset_test = BSTLDataset(train=False)
+  # dataset_test = BSTLDataset(train=False)
   indices = torch.randperm(len(dataset)).tolist()
   dataset = torch.utils.data.Subset(dataset, indices[:-50])
-  dataset_test = torch.utils.data.Subset(dataset_test, indices[-50:])
+  # dataset_test = torch.utils.data.Subset(dataset_test, indices[-50:])
   # define training and validation data loaders
   data_loader = torch.utils.data.DataLoader(
-      dataset, batch_size=8, shuffle=True, num_workers=4,
+      dataset, batch_size=8, shuffle=True, num_workers=8,
       collate_fn=collate_fn)
 
-  data_loader_test = torch.utils.data.DataLoader(
-      dataset_test, batch_size=1, shuffle=False, num_workers=1,
-      collate_fn=collate_fn)
+  # data_loader_test = torch.utils.data.DataLoader(
+  #     dataset_test, batch_size=1, shuffle=False, num_workers=1,
+  #     collate_fn=collate_fn)
 
   # move model to the right device
   model.to(device)
@@ -256,7 +256,7 @@ def train():
   lr_scheduler = None
 
   # let's train it for 10 epochs
-  num_epochs = 10
+  num_epochs = 30
   # loop = tqdm(
   #   total=(len(data_loader)+ len(data_loader_test))*num_epochs, position=0)
   loop = tqdm(
@@ -272,12 +272,13 @@ def train():
     eloss = 0.0
     loop.set_description('epoch:{}, train loss:{:.4f}, test loss:{:.4f}'.format(epoch, tloss, eloss))
     loop.update(1)
-
+    if epoch % 5 == 0:
+      torch.save(model.state_dict(), 'tlight_' + str(epoch) +'.pt')
   print("That's it!")
-  dummy_input = torch.randn(5, 3, 1280, 720, device='cuda')
+  # dummy_input = torch.randn(5, 3, 1280, 720, device='cuda')
   # torch.onnx.export(
   #   model, dummy_input, "tlight.onnx", verbose=True)
-  torch.save(model.state_dict(), 'tlight.pt')
+
 
 
 def main():
