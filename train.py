@@ -95,28 +95,37 @@ class BSTLDataset(Dataset):
     # print(image.shape, target)
     boxes = []
     labels = []
+    areas = []
     for t in target:
       boxes.append(
         [t['x_min'], t['y_min'], t['x_max'], t['y_max']])
+      area = (t['x_max'] - t['x_min']) * (t['y_max'] - t['y_min'])
+      # area = torch.as_tensor(area, dtype=torch.float32)
+      areas.append([area])
       labels.append(
         [EVAL_ID_MAP[SIMPLIFIED_CLASSES[t['label']]]])
+
     boxes = torch.as_tensor(boxes, dtype=torch.float32)
     labels = torch.as_tensor(labels, dtype=torch.int64)
     labels = torch.reshape(labels, (labels.shape[0],))
+    imageid = torch.tensor([index])
+    areas = torch.as_tensor(areas, dtype=torch.float32)
     # print(boxes.shape, labels.shape)
     # if boxes.shape[0] ==1:
     #  print(boxes, labels)
-    return image, {'boxes': boxes, 'labels': labels}
+    return image, {
+      'boxes': boxes, 'labels': labels,
+      'image_id':imageid, 'area': areas}
 
   def __len__(self):
     return len(self.data)
 
 
 def run_one_epoch(
-    train_loader, optimizer, model, lr_scheduler, device):
+    train_loader, optimizer, model, lr_scheduler, device, loss_hist):
 
   model.train()
-  losslog = []
+  # losslog = []
   for images, targets in train_loader:
     image = list(image.to(device) for image in images)
     # print(targets[0])
@@ -125,8 +134,8 @@ def run_one_epoch(
     # print(targets)
     loss_dict = model(image, targets)
     losses = sum(loss for loss in loss_dict.values())
-    losslog.append(losses.item())
-
+    loss_val = losses.item()
+    loss_hist.send(loss_val)
     # Reset the grad value to zero
     optimizer.zero_grad()
     losses.backward()
@@ -134,8 +143,8 @@ def run_one_epoch(
 
     if lr_scheduler is not None:
       lr_scheduler.step()
-  return np.mean(losslog)
-
+  # return np.mean(losslog)
+  return loss_hist.value
 
 @torch.no_grad()
 def evaluate(model, test_loader, device):
@@ -150,6 +159,27 @@ def evaluate(model, test_loader, device):
   return res
 
 
+class Averager:
+    def __init__(self):
+        self.current_total = 0.0
+        self.iterations = 0.0
+
+    def send(self, value):
+        self.current_total += value
+        self.iterations += 1
+
+    @property
+    def value(self):
+        if self.iterations == 0:
+            return 0
+        else:
+            return 1.0 * self.current_total / self.iterations
+
+    def reset(self):
+        self.current_total = 0.0
+        self.iterations = 0.0
+
+
 def train():
   import torchvision
   from torchvision.models.detection import FasterRCNN
@@ -160,22 +190,22 @@ def train():
     pretrained=True)
   num_classes = 4  # 1 class (person) + background
   # get number of input features for the classifier
-  # in_features = model.roi_heads.box_predictor.cls_score.in_features
+  in_features = model.roi_heads.box_predictor.cls_score.in_features
   # replace the pre-trained head with a new one
-  # model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-  backbone = torchvision.models.mobilenet_v2(pretrained=True).features
+  model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+  # backbone = torchvision.models.mobilenet_v2(pretrained=True).features
   # FasterRCNN needs to know the number of
   # output channels in a backbone. For mobilenet_v2, it's 1280
   # so we need to add it here
-  backbone.out_channels = 1280
+  # backbone.out_channels = 1280
 
   # let's make the RPN generate 5 x 3 anchors per spatial
   # location, with 5 different sizes and 3 different aspect
   # ratios. We have a Tuple[Tuple[int]] because each feature
   # map could potentially have different sizes and
   # aspect ratios
-  anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256, 512),),
-                                    aspect_ratios=((0.5, 1.0, 2.0),))
+  # anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256, 512),),
+  #                                   aspect_ratios=((0.5, 1.0, 2.0),))
 
   # let's define what are the feature maps that we will
   # use to perform the region of interest cropping, as well as
@@ -184,15 +214,15 @@ def train():
   # be [0]. More generally, the backbone should return an
   # OrderedDict[Tensor], and in featmap_names you can choose which
   # feature maps to use.
-  roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0', '1', '2', '3'],
-                                                  output_size=7,
-                                                  sampling_ratio=2)
+  # roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0', '1', '2', '3'],
+  #                                                 output_size=7,
+  #                                                 sampling_ratio=2)
 
   # put the pieces together inside a FasterRCNN model
-  model = FasterRCNN(backbone,
-                    num_classes=4,
-                    rpn_anchor_generator=anchor_generator,
-                    box_roi_pool=roi_pooler)
+  # model = FasterRCNN(backbone,
+  #                   num_classes=4,
+  #                   rpn_anchor_generator=anchor_generator,
+  #                   box_roi_pool=roi_pooler)
   # replace the pre-trained head with a new one
   device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
   # device = 'cpu'
@@ -220,20 +250,24 @@ def train():
                               momentum=0.9, weight_decay=0.0005)
 
   # and a learning rate scheduler
-  lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-                                                  step_size=3,
-                                                  gamma=0.1)
+  # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+  #                                                 step_size=3,
+  #                                                 gamma=0.1)
+  lr_scheduler = None
 
   # let's train it for 10 epochs
   num_epochs = 10
   # loop = tqdm(
   #   total=(len(data_loader)+ len(data_loader_test))*num_epochs, position=0)
   loop = tqdm(
-    total=(len(data_loader))*num_epochs, position=0)
+    total=(num_epochs), position=0)
+  loss_hist = Averager()
 
   for epoch in range(num_epochs):
+    loss_hist.reset()
     # train for one epoch, printing every 10 iterations
-    tloss = run_one_epoch(data_loader, optimizer, model, lr_scheduler, device)
+    tloss = run_one_epoch(
+      data_loader, optimizer, model, lr_scheduler, device, loss_hist)
     # eloss = evaluate(model, data_loader_test, device=device)
     eloss = 0.0
     loop.set_description('epoch:{}, train loss:{:.4f}, test loss:{:.4f}'.format(epoch, tloss, eloss))
