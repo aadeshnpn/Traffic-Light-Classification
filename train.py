@@ -235,7 +235,7 @@ def train():
   # dataset_test = torch.utils.data.Subset(dataset_test, indices[-50:])
   # define training and validation data loaders
   data_loader = torch.utils.data.DataLoader(
-      dataset, batch_size=8, shuffle=True, num_workers=8,
+      dataset, batch_size=10, shuffle=True, num_workers=8,
       collate_fn=collate_fn)
 
   # data_loader_test = torch.utils.data.DataLoader(
@@ -257,7 +257,7 @@ def train():
   lr_scheduler = None
 
   # let's train it for 10 epochs
-  num_epochs = 30
+  num_epochs = 100
   # loop = tqdm(
   #   total=(len(data_loader)+ len(data_loader_test))*num_epochs, position=0)
   loop = tqdm(
@@ -273,7 +273,7 @@ def train():
     eloss = 0.0
     loop.set_description('epoch:{}, train loss:{:.4f}, test loss:{:.4f}'.format(epoch, tloss, eloss))
     loop.update(1)
-    if epoch % 5 == 0:
+    if epoch % 10 == 0:
       torch.save(model.state_dict(), 'tlight_' + str(epoch) +'.pt')
   print("That's it!")
   # dummy_input = torch.randn(5, 3, 1280, 720, device='cuda')
