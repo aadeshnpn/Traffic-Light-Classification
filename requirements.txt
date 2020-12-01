@@ -1,5 +1,6 @@
 numpy
 matplotlib
 tqdm
+opencv-python
 torch
-torch-vision
+torchvision

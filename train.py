@@ -84,6 +84,7 @@ class BSTLDataset(Dataset):
 
     fname = 'bsltd_train.pkl' if train else 'bsltd_test.pkl'
     self.data = load_pickle(root, fname)
+    # print(self.data)
     self.train = train
     # print('datalenght', self.train, len(self.data))
     self.transform = get_transform(train)
@@ -118,7 +119,7 @@ class BSTLDataset(Dataset):
       'image_id':imageid, 'area': areas}
 
   def __len__(self):
-    return len(self.data)
+    return 10 # len(self.data)
 
 
 def run_one_epoch(
@@ -280,6 +281,60 @@ def train():
   #   model, dummy_input, "tlight.onnx", verbose=True)
 
 
+def visualize():
+  # Load the model
+  # Visualize
+  import torchvision
+  from torchvision.models.detection import FasterRCNN
+  from torchvision.models.detection.rpn import AnchorGenerator
+  # load a model pre-trained pre-trained on COCO
+  from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+  import cv2
+  model = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+    pretrained=True)
+  num_classes = 4  # 1 class (person) + background
+  # get number of input features for the classifier
+  in_features = model.roi_heads.box_predictor.cls_score.in_features
+  # replace the pre-trained head with a new one
+  model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+  # Load model from saved pt file
+  model.load_state_dict(torch.load('tlight_90.pt', map_location=torch.device('cpu')))
+  dataset_test = BSTLDataset(root='/tmp', train=False)
+  data_loader_test = torch.utils.data.DataLoader(
+      dataset_test, batch_size=1, shuffle=True, num_workers=1,
+      collate_fn=collate_fn)
+
+  device = "cpu"
+
+  model.eval()
+  cpu_device = torch.device("cpu")
+
+  for i in range(10):
+    images, targets = next(iter(data_loader_test))
+    images = list(img.to(device) for img in images)
+    targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+    # print(targets)
+    boxes = targets[0]['boxes'].cpu().numpy().astype(np.int32)
+    # print(images[0].shape)
+    sample = images[0].permute(1,2,0).cpu().numpy().astype(np.float32)
+    sample = cv2.UMat(sample)
+    # sample = images[0]
+    outputs = model(images)
+    outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
+    fig, ax = plt.subplots(1, 1, figsize=(16, 8))
+
+    # print(sample.shape)
+    for box in boxes:
+      cv2.rectangle(sample,
+                      (box[0], box[1]),
+                      (box[2], box[3]),
+                      (220, 0, 0), 3)
+
+    ax.set_axis_off()
+    # print(dir(sample))
+    ax.imshow(cv2.UMat.get(sample))
+    plt.show()
+
 
 def main():
   train_dataset = BSTLDataset()
@@ -291,4 +346,5 @@ def main():
 
 
 # main()
-train()
+# train()
+visualize()
