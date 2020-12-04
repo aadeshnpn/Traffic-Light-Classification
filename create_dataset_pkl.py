@@ -2,7 +2,7 @@
 Sample script to receive traffic light labels and images
 of the Bosch Small Traffic Lights Dataset.
 Example usage:
-    python read_label_file.py input_yaml
+    python create_dataset_pkl.py input_yaml
 """
 
 import os
