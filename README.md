@@ -1,5 +1,5 @@
 # Traffic-Light-Classification
-Traffic Light detection and classification
+Traffic Light detection and classification using PyTorch and FasterRCNN
 
 ## Dataset
 Bosch Small Traffic Lights Dataset
@@ -16,7 +16,7 @@ https://byu.box.com/s/4w3b8h4zwoq4gzwz8vhkl0us8w5chlq1
 
 ## Instructions
 1. Download the dataset and follow the official instructions to extract the dataset
-2. The extracted files will contain images and yaml files. 
+2. The extracted files will contain images and yaml files.
 3. Run the script `create_dataset_pkl.py` with a yaml file as argument.
 4. The above script will create a pickle file in the same directory as the yaml file and `bstld_(yaml file name).pkl`
 5. Run `main.py --mode train --dir <directory where pickle file exists>` to train the FasterRCNN model

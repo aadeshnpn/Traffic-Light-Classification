@@ -1,5 +1,6 @@
 """
 List of quick helper functions
+Copied from https://github.com/bosch-ros-pkg/bstld/blob/master/tf_object_detection/utils.py
 """
 
 import os
