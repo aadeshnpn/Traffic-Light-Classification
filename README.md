@@ -23,4 +23,5 @@ https://byu.box.com/s/4w3b8h4zwoq4gzwz8vhkl0us8w5chlq1
 6. Run `main.py --mode test --dir <directory where pickle file exists>` to test the trained FasterRCNN model
 
 ## Model test on an Image
+![TF_detection1](https://user-images.githubusercontent.com/1760420/101211191-c3778c80-3644-11eb-9f12-2c3278d76315.png)
 ![TF_detection](https://user-images.githubusercontent.com/1760420/101208526-5235da80-3640-11eb-89e5-0e67f5c28c03.png)
