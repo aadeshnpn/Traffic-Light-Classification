@@ -324,7 +324,8 @@ def visualize():
     fig, ax = plt.subplots(1, 1, figsize=(16, 8))
 
     # print(sample.shape)
-    for box in boxes:
+    print(outputs)
+    for box in outputs[0]['boxes']:
       cv2.rectangle(sample,
                       (box[0], box[1]),
                       (box[2], box[3]),
