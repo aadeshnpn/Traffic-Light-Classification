@@ -316,10 +316,11 @@ def visualize(folder):
     boxes = targets[0]['boxes'].cpu().numpy().astype(np.int32)
     sample = images[0].permute(1,2,0).cpu().numpy().astype(np.float32)
     sample = cv2.UMat(sample)
+    print(images[0].shape, images)
     outputs = model(images)
     outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
     fig, ax = plt.subplots(1, 1, figsize=(16, 8))
-
+    print(outputs[0])
     for box in outputs[0]['boxes']:
       cv2.rectangle(sample,
                       (box[0], box[1]),
